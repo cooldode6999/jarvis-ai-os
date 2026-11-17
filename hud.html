@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J.A.R.V.I.S. // MK-102 AUTONOMOUS OS</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+    :root {
+      --pri: #00f0ff;
+      --sec: #ff0055;
+      --ter: #9d00ff;
+      --ok: #00ff9d;
+      --warn: #ffae00;
+      --bg: #010308;
+      --panel: rgba(5, 11, 24, 0.82);
+    }
+
+    body.theme-stark { --pri: #ffae00; --sec: #ff2a00; --ter: #00e5ff; }
+    body.theme-matrix { --pri: #00ff9d; --sec: #00b8ff; --ter: #7000ff; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--pri);
+      font-family: 'Rajdhani', sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      perspective: 1500px;
+      user-select: none;
+    }
+
+    #webgl-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+    .cyber-overlay {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.88) 100%),
+        repeating-linear-gradient(0deg, rgba(0, 240, 255, 0.025) 0px, rgba(0, 240, 255, 0.025) 1px, transparent 1px, transparent 3px);
+    }
+
+    .deck-shell {
+      position: relative; z-index: 5; height: 100vh;
+      display: grid; grid-template-rows: 56px 1fr 66px;
+      padding: 14px 22px; gap: 12px;
+    }
+
+    .top-ribbon {
+      display: flex; justify-content: space-between; align-items: center; padding: 0 22px;
+      background: linear-gradient(90deg, rgba(255,0,85,0.2), rgba(5,12,26,0.92) 25%, rgba(5,12,26,0.92) 75%, rgba(0,240,255,0.2));
+      border: 1px solid rgba(0, 240, 255, 0.45);
+      clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 18px 100%, 0 50%);
+    }
+
+    .brand-glitch {
+      font-family: 'Orbitron', sans-serif; font-size: 1.12rem; font-weight: 900; letter-spacing: 3px;
+      color: #fff; text-shadow: -2px 0 var(--sec), 2px 0 var(--pri);
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 12px var(--ok); }
+    .ribbon-right { display: flex; align-items: center; gap: 8px; }
+
+    .tag-box {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; padding: 5px 10px;
+      background: rgba(0, 240, 255, 0.1); border: 1px solid var(--pri); color: #fff;
+    }
+
+    .top-btn {
+      background: rgba(255, 0, 85, 0.22); border: 1px solid var(--sec); color: #fff;
+      font-family: 'Orbitron', sans-serif; font-size: 0.64rem; padding: 6px 10px; cursor: pointer;
+    }
+    .top-btn:hover { background: var(--sec); }
+
+    .cockpit-grid {
+      display: grid; grid-template-columns: 380px 1fr 405px; gap: 18px; min-height: 0;
+    }
+
+    .holo-wing {
+      background: var(--panel); border: 1px solid rgba(0, 240, 255, 0.35);
+      backdrop-filter: blur(14px); padding: 13px; display: flex; flex-direction: column;
+      gap: 9px; min-height: 0;
+      clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+    }
+
+    .wing-l { border-left: 3px solid var(--sec); }
+    .wing-r { border-right: 3px solid var(--pri); }
+
+    .mod-title {
+      font-family: 'Orbitron', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 2px;
+      color: #fff; display: flex; justify-content: space-between;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.28); padding-bottom: 4px;
+    }
+    .mod-title small { color: var(--sec); font-family: 'JetBrains Mono', monospace; }
+
+    .gauge-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .g-card {
+      background: rgba(2, 7, 18, 0.85); border: 1px solid rgba(0, 240, 255, 0.22);
+      padding: 5px 2px; display: flex; flex-direction: column; align-items: center; position: relative;
+    }
+    .g-svg { width: 52px; height: 52px; transform: rotate(-90deg); }
+    .g-bg { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 6; }
+    .g-bar { fill: none; stroke: var(--pri); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 163; stroke-dashoffset: 163; transition: stroke-dashoffset 0.5s ease; }
+    .g-val { position: absolute; top: 21px; font-family: 'Orbitron', sans-serif; font-size: 0.65rem; font-weight: 700; color: #fff; }
+    .g-lbl { font-size: 0.58rem; color: #94a3b8; margin-top: 2px; font-weight: 700; }
+
+    /* PDEU Exam Banner */
+    .pdpu-card {
+      background: linear-gradient(135deg, rgba(255, 0, 85, 0.14), rgba(0, 240, 255, 0.08));
+      border: 1px solid rgba(255, 0, 85, 0.45); padding: 7px 9px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .pdpu-row { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: #fff; }
+    .pdpu-badge { background: var(--sec); color: #fff; padding: 1px 6px; font-weight: 700; font-size: 0.64rem; }
+
+    /* Autonomous Workflows */
+    .wf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .wf-btn {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.14), rgba(157, 0, 255, 0.14));
+      border: 1px solid var(--pri); color: #fff; padding: 7px 4px;
+      font-family: 'Orbitron', sans-serif; font-size: 0.6rem; font-weight: 700; cursor: pointer;
+    }
+    .wf-btn:hover { background: var(--pri); color: #000; }
+
+    /* App Matrix */
+    .app-matrix { display: flex; flex-direction: column; gap: 4px; }
+    .app-row {
+      display: grid; grid-template-columns: 1fr 60px 60px; gap: 5px; align-items: center;
+      background: rgba(2, 8, 22, 0.75); border: 1px solid rgba(0, 240, 255, 0.2); padding: 4px 8px;
+    }
+    .app-name { font-family: 'Orbitron', sans-serif; font-size: 0.62rem; font-weight: 700; color: #e2e8f0; }
+    .btn-open, .btn-close { font-family: 'Orbitron', sans-serif; font-size: 0.56rem; font-weight: 700; padding: 4px 0; border: 1px solid; cursor: pointer; }
+    .btn-open { background: rgba(0, 240, 255, 0.12); border-color: var(--pri); color: var(--pri); }
+    .btn-open:hover { background: var(--pri); color: #000; }
+    .btn-close { background: rgba(255, 0, 85, 0.14); border-color: var(--sec); color: #ff80aa; }
+    .btn-close:hover { background: var(--sec); color: #fff; }
+
+    .util-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin-top: auto; }
+    .u-btn {
+      background: rgba(255, 0, 85, 0.16); border: 1px solid var(--sec);
+      color: #fff; padding: 7px 5px; font-family: 'Orbitron', sans-serif; font-size: 0.58rem; font-weight: 700; cursor: pointer;
+    }
+    .u-btn:hover { background: var(--sec); }
+
+    /* Center Core */
+    .center-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .core-housing { width: 340px; height: 340px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    #circular-spectrum { position: absolute; inset: 0; width: 340px; height: 340px; pointer-events: none; }
+    .hud-rings-svg { position: absolute; inset: 10px; width: 320px; height: 320px; pointer-events: none; }
+    .cw-slow { animation: rotCW 24s linear infinite; transform-origin: center; }
+    .ccw-fast { animation: rotCCW 8s linear infinite; transform-origin: center; }
+    @keyframes rotCW { 100% { transform: rotate(360deg); } }
+    @keyframes rotCCW { 100% { transform: rotate(-360deg); } }
+
+    .core-center-text { z-index: 4; text-align: center; pointer-events: none; background: radial-gradient(circle, rgba(2,6,18,0.88) 0%, transparent 75%); padding: 20px; border-radius: 50%; }
+    .state-Readout { font-family: 'Orbitron', sans-serif; font-size: 1.38rem; font-weight: 900; letter-spacing: 3px; color: #fff; text-shadow: -2px 0 var(--sec), 2px 0 var(--pri); }
+    .sub-Readout { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #cbd5e1; letter-spacing: 1.5px; margin-top: 5px; }
+
+    .center-actions { display: flex; gap: 10px; margin-top: 10px; }
+    .act-btn {
+      font-family: 'Orbitron', sans-serif; font-size: 0.72rem; font-weight: 800; letter-spacing: 1.2px;
+      padding: 10px 18px; cursor: pointer; border: 1px solid var(--pri); background: rgba(0, 240, 255, 0.16); color: #fff;
+    }
+    .act-btn:hover { background: var(--pri); color: #000; }
+    .act-btn.abort { border-color: var(--sec); background: rgba(255, 0, 85, 0.22); color: #ffb3cc; }
+    .act-btn.abort:hover { background: var(--sec); color: #fff; }
+
+    /* Right Wing: Logs + SQLite Memory Vault */
+    .log-viewport {
+      flex: 1; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+      display: flex; flex-direction: column; gap: 6px; padding-right: 4px;
+    }
+    .log-item { background: rgba(3, 10, 24, 0.86); border-left: 3px solid var(--pri); padding: 6px 8px; line-height: 1.4; color: #e2e8f0; }
+    .log-item.user { border-left-color: var(--sec); background: rgba(255, 0, 85, 0.14); color: #fff; }
+    .log-item.ai { border-left-color: var(--ok); background: rgba(0, 255, 157, 0.1); }
+
+    .mem-box {
+      background: rgba(2, 8, 20, 0.88); border: 1px solid rgba(0, 255, 157, 0.35);
+      padding: 7px; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; max-height: 105px; overflow-y: auto;
+    }
+    .mem-row { padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.1); color: #a7f3d0; }
+
+    .bottom-dock {
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(5, 11, 25, 0.94); border: 1px solid rgba(0, 240, 255, 0.45); padding: 0 18px;
+    }
+    .dock-prompt { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 0.76rem; color: var(--sec); }
+    #cmdInput { flex: 1; background: transparent; border: none; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; outline: none; padding: 10px 0; }
+    .send-btn { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 0.74rem; letter-spacing: 2px; padding: 9px 22px; background: linear-gradient(90deg, var(--sec), var(--ter)); color: #fff; border: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <canvas id="webgl-canvas"></canvas>
+  <div class="cyber-overlay"></div>
+
+  <div class="deck-shell">
+    <header class="top-ribbon">
+      <div class="brand-glitch">
+        <div class="live-dot"></div>
+        J.A.R.V.I.S. // MK-102 AUTONOMOUS OS
+      </div>
+      <div class="ribbon-right">
+        <div class="tag-box" id="modePill">MODE: STANDARD</div>
+        <div class="tag-box" id="voiceStatusPill">LOCK: CHECKING</div>
+        <button class="top-btn" id="accentBtn" onclick="toggleAccent()">🔊 INDIAN</button>
+        <button class="top-btn" onclick="cycleTheme()">◈ THEME</button>
+        <div class="tag-box" id="clockPill">00:00:00</div>
+      </div>
+    </header>
+
+    <main class="cockpit-grid">
+      <!-- LEFT WING -->
+      <section class="holo-wing wing-l">
+        <div class="mod-title"><span>RYZEN-5 TELEMETRY</span><small>16GB RAM</small></div>
+        <div class="gauge-strip">
+          <div class="g-card"><svg class="g-svg" viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="26"></circle><circle class="g-bar" id="gCpu" cx="32" cy="32" r="26"></circle></svg><div class="g-val" id="tCpu">0%</div><div class="g-lbl">CPU</div></div>
+          <div class="g-card"><svg class="g-svg" viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="26"></circle><circle class="g-bar" id="gRam" cx="32" cy="32" r="26" style="stroke:var(--sec)"></circle></svg><div class="g-val" id="tRam">0%</div><div class="g-lbl">RAM</div></div>
+          <div class="g-card"><svg class="g-svg" viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="26"></circle><circle class="g-bar" id="gDisk" cx="32" cy="32" r="26" style="stroke:var(--warn)"></circle></svg><div class="g-val" id="tDisk">0%</div><div class="g-lbl">SSD</div></div>
+          <div class="g-card"><svg class="g-svg" viewBox="0 0 64 64"><circle class="g-bg" cx="32" cy="32" r="26"></circle><circle class="g-bar" id="gBat" cx="32" cy="32" r="26" style="stroke:var(--ok)"></circle></svg><div class="g-val" id="tBat">100%</div><div class="g-lbl">PWR</div></div>
+        </div>
+
+        <div class="mod-title"><span>PDEU EXAM RADAR</span><small>26BCP143</small></div>
+        <div class="pdpu-card">
+          <div class="pdpu-row"><span>END-SEM (26 NOV)</span><span class="pdpu-badge" id="endsemDays">-- DAYS</span></div>
+          <div class="pdpu-row"><span>ANANDI-NEAT (29 NOV)</span><span class="pdpu-badge" id="neatDays" style="background:var(--ter)">-- DAYS</span></div>
+          <div class="pdpu-row" style="font-size:0.62rem; color:#94a3b8;"><span id="schedToday">Loading...</span></div>
+        </div>
+
+        <div class="mod-title"><span>AUTONOMOUS WORKFLOWS</span><small>MACRO CHAINS</small></div>
+        <div class="wf-grid">
+          <button class="wf-btn" onclick="quickCmd('Activate Study Mode')">📚 STUDY MODE</button>
+          <button class="wf-btn" onclick="quickCmd('Activate Dev Mode')">⚡ DEV MODE</button>
+          <button class="wf-btn" onclick="quickCmd('Activate Chill Mode')">🎧 CHILL MODE</button>
+        </div>
+
+        <div class="mod-title"><span>APP CONTROLLER</span><small>OPEN / KILL</small></div>
+        <div class="app-matrix">
+          <div class="app-row"><span class="app-name">▶ YOUTUBE</span><button class="btn-open" onclick="quickCmd('Open YouTube')">OPEN</button><button class="btn-close" onclick="quickCmd('Close YouTube')">CLOSE</button></div>
+          <div class="app-row"><span class="app-name">⌘ VS CODE</span><button class="btn-open" onclick="quickCmd('Open VS Code')">OPEN</button><button class="btn-close" onclick="quickCmd('Close VS Code')">CLOSE</button></div>
+        </div>
+
+        <div class="util-grid">
+          <button class="u-btn" onclick="quickCmd('Fix the error on my screen and copy fixed code to clipboard')">🛠️ FIX SCREEN CODE</button>
+          <button class="u-btn" onclick="quickCmd('Read my unread Gmail emails')">✉️ GMAIL DIGEST</button>
+        </div>
+      </section>
+
+      <!-- CENTER CORE -->
+      <section class="center-zone">
+        <div class="core-housing" onclick="startVoice()">
+          <canvas id="circular-spectrum" width="340" height="340"></canvas>
+          <svg class="hud-rings-svg" viewBox="0 0 320 320">
+            <g class="cw-slow">
+              <circle cx="160" cy="160" r="148" fill="none" stroke="rgba(0,240,255,0.3)" stroke-width="1.5" stroke-dasharray="20 12 4 12" />
+              <circle cx="160" cy="160" r="134" fill="none" stroke="rgba(255,0,85,0.42)" stroke-width="2" stroke-dasharray="70 130" />
+            </g>
+            <g class="ccw-fast">
+              <circle cx="160" cy="160" r="114" fill="none" stroke="rgba(0,240,255,0.68)" stroke-width="2.5" stroke-dasharray="35 60" />
+            </g>
+          </svg>
+          <div class="core-center-text">
+            <div class="state-Readout" id="coreStatus">STANDBY</div>
+            <div class="sub-Readout" id="coreSub">SAY "HEY JARVIS" OR CLICK</div>
+          </div>
+        </div>
+
+        <div class="center-actions">
+          <button class="act-btn" onclick="startVoice()">🎙️ VOICE CMD</button>
+          <button class="act-btn abort" onclick="abortNow()">🛑 ABORT [ESC]</button>
+          <button class="act-btn abort" onclick="quickCmd('Exit Jarvis')">⏻ EXIT ALL</button>
+        </div>
+      </section>
+
+      <!-- RIGHT WING -->
+      <section class="holo-wing wing-r">
+        <div class="mod-title"><span>NEURAL EXECUTION LOGS</span><small>LIVE FEED</small></div>
+        <div class="log-viewport" id="logFeed"></div>
+
+        <div class="mod-title"><span>SQLITE PERSISTENT MEMORY</span><small>jarvis_memory.db</small></div>
+        <div class="mem-box" id="memBox">No saved memories yet.</div>
+      </section>
+    </main>
+
+    <footer class="bottom-dock">
+      <span class="dock-prompt">NAYAN@MK102 ></span>
+      <input
+        type="text"
+        id="cmdInput"
+        placeholder="Command (e.g., 'Activate Study Mode', 'Dhruvik ko WhatsApp bhejo Hello', 'Fix screen error to clipboard')..."
+        onkeydown="if(event.key==='Enter') sendText()"
+      />
+      <label style="display:flex; align-items:center; gap:5px; font-family:'Orbitron'; font-size:0.66rem; cursor:pointer;">
+        <input type="checkbox" id="speakChk" checked /> SPEAK
+      </label>
+      <button class="send-btn" onclick="sendText()">EXECUTE</button>
+    </footer>
+  </div>
+
+  <script>
+    const themes = ['', 'theme-stark', 'theme-matrix'];
+    let tIdx = 0;
+    function cycleTheme() { tIdx = (tIdx + 1) % themes.length; document.body.className = themes[tIdx]; }
+
+    let currentState = 'STANDBY';
+    const circCanvas = document.getElementById('circular-spectrum');
+    const circCtx = circCanvas.getContext('2d');
+
+    function drawVisualizers() {
+      requestAnimationFrame(drawVisualizers);
+      const t = Date.now() * 0.006;
+      const active = currentState === 'LISTENING' || currentState === 'SPEAKING';
+      circCtx.clearRect(0, 0, 340, 340);
+      const cx = 170, cy = 170, baseR = 94, bars = 48;
+      for (let i = 0; i < bars; i++) {
+        const ang = (i / bars) * Math.PI * 2;
+        const amp = active ? (15 + Math.abs(Math.sin(t * 2.6 + i * 0.6)) * 34) : (6 + Math.sin(t + i) * 4);
+        circCtx.strokeStyle = i % 2 === 0 ? '#00f0ff' : '#ff0055';
+        circCtx.lineWidth = 3;
+        circCtx.beginPath();
+        circCtx.moveTo(cx + Math.cos(ang) * baseR, cy + Math.sin(ang) * baseR);
+        circCtx.lineTo(cx + Math.cos(ang) * (baseR + amp), cy + Math.sin(ang) * (baseR + amp));
+        circCtx.stroke();
+      }
+    }
+    drawVisualizers();
+
+    const canvas = document.getElementById('webgl-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5.3;
+
+    const octMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.38 });
+    const octMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1.15, 2), octMat);
+    scene.add(octMesh);
+
+    const pCount = 1200;
+    const pPos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount * 3; i++) pPos[i] = (Math.random() - 0.5) * 20;
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const stars = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.03, color: 0x00f0ff, transparent: true, opacity: 0.7 }));
+    scene.add(stars);
+
+    let spinSpeed = 0.006;
+    function animate3D() {
+      requestAnimationFrame(animate3D);
+      octMesh.rotation.y += spinSpeed;
+      octMesh.rotation.x += spinSpeed * 0.5;
+      stars.rotation.y += 0.0006;
+      renderer.render(scene, camera);
+    }
+    animate3D();
+
+    function setGauge(id, txtId, val) {
+      const off = 163 - (163 * Math.min(Math.max(val, 0), 100)) / 100;
+      document.getElementById(id).style.strokeDashoffset = off;
+      document.getElementById(txtId).innerText = Math.round(val) + '%';
+    }
+
+    async function pollTelemetry() {
+      try {
+        const res = await fetch('/api/telemetry');
+        const d = await res.json();
+
+        setGauge('gCpu', 'tCpu', d.cpu);
+        setGauge('gRam', 'tRam', d.ram);
+        setGauge('gDisk', 'tDisk', d.disk);
+        setGauge('gBat', 'tBat', d.battery);
+
+        currentState = d.status;
+        document.getElementById('coreStatus').innerText = d.status;
+        document.getElementById('modePill').innerText = 'MODE: ' + d.active_mode;
+        document.getElementById('voiceStatusPill').innerText = d.voice_enrolled ? 'LOCK: VERIFIED' : 'LOCK: UNSET';
+        document.getElementById('accentBtn').innerText = '🔊 ' + d.voice_name;
+
+        if (d.pdpu) {
+          document.getElementById('endsemDays').innerText = d.pdpu.days_to_endsem + ' DAYS';
+          document.getElementById('neatDays').innerText = d.pdpu.days_to_neat + ' DAYS';
+          document.getElementById('schedToday').innerText = d.pdpu.schedule_today;
+        }
+
+        if (d.memories && d.memories.length > 0) {
+          document.getElementById('memBox').innerHTML = d.memories.map(m =>
+            `<div class="mem-row"><strong>${m.topic}:</strong> ${m.detail}</div>`
+          ).join('');
+        }
+
+        const sub = document.getElementById('coreSub');
+        if (d.status === 'LISTENING') { octMat.color.setHex(0xff0055); spinSpeed = 0.025; sub.innerText = 'SPEAK COMMAND NOW...'; }
+        else if (d.status === 'THINKING') { octMat.color.setHex(0xffae00); spinSpeed = 0.04; sub.innerText = 'PROCESSING...'; }
+        else if (d.status === 'SPEAKING') { octMat.color.setHex(0x00ff9d); spinSpeed = 0.017; sub.innerText = 'JARVIS SPEAKING...'; }
+        else { octMat.color.setHex(0x00f0ff); spinSpeed = 0.006; sub.innerText = 'SAY "HEY JARVIS" OR CLICK'; }
+
+        const logHash = d.logs.join('|');
+        if (logHash !== window._lastHash) {
+          window._lastHash = logHash;
+          const feed = document.getElementById('logFeed');
+          feed.innerHTML = d.logs.map(l => {
+            let c = 'log-item';
+            if (l.includes('NAYAN >')) c += ' user';
+            else if (l.includes('JARVIS >')) c += ' ai';
+            return `<div class="${c}">${l}</div>`;
+          }).join('');
+          feed.scrollTop = feed.scrollHeight;
+        }
+      } catch (e) {}
+    }
+    setInterval(pollTelemetry, 750);
+    pollTelemetry();
+
+    setInterval(() => { document.getElementById('clockPill').innerText = new Date().toLocaleTimeString(); }, 1000);
+
+    async function sendText() {
+      const inp = document.getElementById('cmdInput');
+      const cmd = inp.value.trim();
+      if (!cmd) return;
+      inp.value = '';
+      await fetch('/api/command', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd, voice_reply: document.getElementById('speakChk').checked })
+      });
+    }
+    async function quickCmd(cmd) {
+      await fetch('/api/command', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd, voice_reply: true })
+      });
+    }
+    async function toggleAccent() { await fetch('/api/toggle-voice', { method: 'POST' }); }
+    async function startVoice() { await fetch('/api/voice-listen', { method: 'POST' }); }
+    async function abortNow() { await fetch('/api/abort', { method: 'POST' }); }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') abortNow(); });
+  </script>
+</body>
+</html>
